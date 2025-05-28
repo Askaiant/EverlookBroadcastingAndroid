@@ -1,3 +1,6 @@
+# App Release Files
+app/release/
+
 # Gradle files
 .gradle/
 build/
