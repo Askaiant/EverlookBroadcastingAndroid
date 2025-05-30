@@ -1,6 +1,7 @@
 package org.everlookkbroadcasting.android.ui.screens
 
 import android.content.BroadcastReceiver
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -28,9 +29,12 @@ import androidx.compose.ui.unit.dp
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
+import com.google.common.util.concurrent.MoreExecutors
 import org.everlookkbroadcasting.android.R
 import org.everlookkbroadcasting.android.models.PlayerState
+import org.everlookkbroadcasting.android.services.PlaybackService
 import org.everlookkbroadcasting.android.ui.components.PlayerControls
 import org.everlookkbroadcasting.android.ui.components.Footer
 import org.everlookkbroadcasting.android.ui.theme.Black90
@@ -41,54 +45,65 @@ fun StreamPlayerScreen() {
     val streamUrl = "https://radio.turtle-music.org/stream"
     val context = LocalContext.current
     var playerState by remember { mutableStateOf(PlayerState.Idle) }
-    var exoPlayer: ExoPlayer? by remember { mutableStateOf(null) }
+    var mediaController: MediaController? by remember { mutableStateOf(null) }
 
+    // MediaController initialization
+    DisposableEffect(Unit) {
+        val sessionToken = SessionToken(context, ComponentName(context, PlaybackService::class.java))
+        val controllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
 
-    // Play/Pause logic
-    val onPlayPauseClick = {
-        when (playerState) {
-            PlayerState.Idle -> {
-                playerState = PlayerState.Loading
-                val player = ExoPlayer.Builder(context).build().apply {
-                    setMediaItem(MediaItem.fromUri(streamUrl))
-                    prepare()
-                    playWhenReady = true
-                    addListener(object : Player.Listener {
-                        override fun onPlaybackStateChanged(state: Int) {
-                            if (state == Player.STATE_READY) {
-                                playerState = PlayerState.Playing
-                            }
-                        }
-                        override fun onPlayerError(error: PlaybackException) {
-                            playerState = PlayerState.Idle
-                        }
-                    })
+        controllerFuture.addListener({
+            val controller = controllerFuture.get()
+            mediaController = controller
+
+            // Listen to player state changes
+            controller.addListener(object : Player.Listener {
+                override fun onPlaybackStateChanged(state: Int) {
+                    playerState = when (state) {
+                        Player.STATE_READY -> if (controller.isPlaying) PlayerState.Playing else PlayerState.Idle
+                        Player.STATE_BUFFERING -> PlayerState.Loading
+                        else -> PlayerState.Idle
+                    }
                 }
-                exoPlayer = player
-            }
-            PlayerState.Playing -> {
-                exoPlayer?.pause()
-                exoPlayer?.release()
-                exoPlayer = null
-                playerState = PlayerState.Idle
-            }
-            PlayerState.Loading -> {
-                // Optionally allow canceling loading
+
+                override fun onPlayerError(error: PlaybackException) {
+                    playerState = PlayerState.Idle
+                }
+            })
+        }, MoreExecutors.directExecutor())
+
+        onDispose {
+            mediaController?.run {
+                release()
+                mediaController = null
             }
         }
     }
 
-    DisposableEffect(Unit) {
-        onDispose {
-            exoPlayer?.release()
-            exoPlayer = null
-        }
+    // Play/Pause logic using MediaController
+    val onPlayPauseClick = {
+        mediaController?.let { controller ->
+            when {
+                !controller.isPlaying -> {
+                    if (controller.mediaItemCount == 0) {
+                        controller.setMediaItem(MediaItem.fromUri(streamUrl))
+                    }
+                    controller.prepare()
+                    controller.playWhenReady = true
+                }
+                else -> {
+                    controller.pause()
+                    controller.stop()
+                }
+            }
+        } ?: Unit
     }
 
     val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
     var currentVolume by remember { mutableStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)) }
 
+    // Volume controls logic
     DisposableEffect(Unit) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
@@ -131,11 +146,11 @@ fun StreamPlayerScreen() {
         }
     }
 
-    // Main container with padding and background
+    // Main container
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Black90) // Bootstrap light background
+            .background(Black90)
             .padding(bottom = 8.dp)
     ) {
         Column(
