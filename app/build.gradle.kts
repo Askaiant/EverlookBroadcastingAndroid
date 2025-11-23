@@ -12,12 +12,14 @@ android {
 
     defaultConfig {
         applicationId = "org.everlookkbroadcasting.android"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 35
         versionCode = 3
         versionName = "1.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "RADIO_STREAM_URL", "\"https://radio.turtle-music.org/stream\"")
 
         setProperty("archivesBaseName", "turtle-radio")
     }
@@ -25,6 +27,7 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".pr"
+            resValue("string", "app_name", "DEBUG-Everlook Broadcasting")
             buildConfigField("String", "SHAKE_API_KEY", "\"\"")
         }
         release {

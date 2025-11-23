@@ -32,6 +32,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.MoreExecutors
+import org.everlookkbroadcasting.android.BuildConfig
 import org.everlookkbroadcasting.android.R
 import org.everlookkbroadcasting.android.models.PlayerState
 import org.everlookkbroadcasting.android.services.PlaybackService
@@ -42,7 +43,7 @@ import org.everlookkbroadcasting.android.ui.theme.Black90
 
 @Composable
 fun StreamPlayerScreen() {
-    val streamUrl = "https://radio.turtle-music.org/stream"
+    val streamUrl = BuildConfig.RADIO_STREAM_URL
     val context = LocalContext.current
     var playerState by remember { mutableStateOf(PlayerState.Idle) }
     var mediaController: MediaController? by remember { mutableStateOf(null) }
